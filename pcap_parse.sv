@@ -19,8 +19,9 @@ module pcap_parse #(
     parameter AXIS_WIDTH    = 512
 ) (
     input                            pause       ,
-    output reg  [    AXIS_WIDTH-1:0] data        , //       .data
+    output reg  [    AXIS_WIDTH-1:0] data =  {AXIS_WIDTH{1'b0}}   , //       .data
     output reg  [(AXIS_WIDTH/8)-1:0] strb        , //       .strb
+    output reg  [              47:0] len         , //       .len
     input  wire                      ready       , //       .ready
     output reg                       valid       , //       .valid
     output reg                       eop         , //       .endofpacket
@@ -129,6 +130,7 @@ module pcap_parse #(
                     strb[j]      = 1'b1;
                 end
             end
+            len =pktSz;
         end
     endtask : readPacket
 

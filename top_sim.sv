@@ -5,19 +5,20 @@ module top_sim;
 
 bit clk             ; 
 bit rst             ; 
+bit pause           ; 
 bit rst_fill        ;
 bit rstn            ;
 
 logic [511:0]   S0_AXIS_TDATA       ;
-logic [31:0]    S0_AXIS_TUSER       ;
+logic [47:0]    S0_AXIS_TUSER       ;
 logic           S0_AXIS_TVALID  = 0 ;
 logic           S0_AXIS_TREADY      ;
 logic [63:0]    S0_AXIS_TKEEP       ;
 logic           S0_AXIS_TLAST       ; 
 
 logic  [511:0]   M0_AXIS_TDATA         ;
-logic            M0_AXIS_TUSER         ;
-logic            M0_AXIS_TVALID  = 0   ;
+logic  [47:0]    M0_AXIS_TUSER         ;
+logic            M0_AXIS_TVALID        ;
 logic            M0_AXIS_TREADY        ;
 logic  [63:0]    M0_AXIS_TKEEP         ;
 logic            M0_AXIS_TLAST         ;
@@ -29,7 +30,7 @@ logic           S_AXI_AWVALID  = 0   ;
 logic [31:0]    S_AXI_WDATA    = 0   ;
 logic [3:0]     S_AXI_WSTRB    = 0   ;
 logic           S_AXI_WVALID   = 0   ;
-logic           S_AXI_BREADY   = 0   ;
+logic           S_AXI_BREADY   = 1   ;
 logic [31:0]    S_AXI_ARADDR   = 0   ;
 logic           S_AXI_ARVALID  = 0   ;
 logic           S_AXI_RREADY      ;
@@ -56,12 +57,15 @@ bit[31:0]  addr, data, base_addr = 32'h4400_0000;
 
 
 initial begin
+    pause= 1'b1;
     rst = 1'b1;
     rstn = 1'b0;
     #(100 * CLK_PERIOD);
     rst = 1'b0;
     rstn = 1'b1;
     $display("Reset Deasserted");
+    #(10 * CLK_PERIOD);
+    pause= 1'b0;
    end
 
 
@@ -185,55 +189,110 @@ pcap_parse
 #(
     .pcap_filename  ("/home/sal/vitis/flowid/test.pcap")
 )
-AXIS_STIM_hXDP
+parse_i
 (
-    .pause          (rst        	                                                               ),
+    .pause          (pause        	                                                               ),
     .data           (S0_AXIS_TDATA                                                                 ),
     .strb           (S0_AXIS_TKEEP                                                                 ),
     .ready          (S0_AXIS_TREADY                                                                ),
     .valid          (S0_AXIS_TVALID                                                                ),
+    .len            (S0_AXIS_TUSER                                                                 ),
     .eop            (S0_AXIS_TLAST                                                                 ),
     .clk            (clk         	                                                               ),
     .pktcount       (tx_pktcount_1                                                                 ),
     .pcapfinished   (pcapfinished_1	                                                               ) 
 
 );
-assign S0_AXIS_TUSER=32'b0;
+
+
+
+
+//assign S0_AXIS_TUSER=32'b0;
+
  
-tcp_chksum_0 dut_i  (        
-  .s_axi_control_AWADDR(S_AXI_AWADDR),
-  .s_axi_control_AWVALID(S_AXI_AWVALID),
-  .s_axi_control_AWREADY(S_AXI_AWREADY),
-  .s_axi_control_WDATA(S_AXI_WDATA),
-  .s_axi_control_WSTRB(S_AXI_WSTRB),
-  .s_axi_control_WVALID(S_AXI_WVALID),
-  .s_axi_control_WREADY(S_AXI_WREADY),
-  .s_axi_control_BRESP(S_AXI_BRESP),
-  .s_axi_control_BVALID(S_AXI_BVALID),
-  .s_axi_control_BREADY(S_AXI_BREADY),
-  .s_axi_control_ARADDR(S_AXI_ARADDR),
-  .s_axi_control_ARVALID(S_AXI_ARVALID),
-  .s_axi_control_ARREADY(S_AXI_ARREADY),
-  .s_axi_control_RDATA(S_AXI_RDATA),
-  .s_axi_control_RRESP(S_AXI_RRESP),
-  .s_axi_control_RVALID(S_AXI_RVALID),
-  .s_axi_control_RREADY(S_AXI_RREADY),
-  .ap_clk(clk),
-  .ap_rst_n(rstn),
-  .dataIn_TVALID(S0_AXIS_TVALID),
-  .dataIn_TREADY(S0_AXIS_TREADY),
-  .dataIn_TDATA(S0_AXIS_TDATA),
-  .dataIn_TKEEP(S0_AXIS_TKEEP),
-  .dataIn_TSTRB(S0_AXIS_TKEEP),
-  .dataIn_TLAST(S0_AXIS_TLAST),
-  .dataOut_TVALID(M0_AXIS_TVALID),
-  .dataOut_TREADY(M0_AXIS_TREADY),
-  .dataOut_TDATA(M0_AXIS_TDATA),
-  .dataOut_TKEEP(M0_AXIS_TKEEP),
-  .dataOut_TSTRB(M0_AXIS_TKEEP),
-  .dataOut_TLAST(M0_AXIS_TLAST)
+
+wire [511:0] temp_data;
+wire [63:0] temp_keep;
+wire [47:0]temp_user;
+wire temp_valid;
+wire temp_last;
+wire temp_ready;
+
+
+//packet_merger_header #(.FIFO_DEPTH(2048)) 
+merge_pkt 
+dut_inst(
+    // Global Ports
+    .aclk          (clk),
+    .aresetn       (rstn),
+    .enable        (1'b1),
+
+    .s_axis_tvalid (S0_AXIS_TVALID),
+    .s_axis_tdata  (S0_AXIS_TDATA),
+    .s_axis_tkeep  (S0_AXIS_TKEEP),
+    .s_axis_tlast  (S0_AXIS_TLAST),
+    .s_axis_tuser  (S0_AXIS_TUSER),
+    .s_axis_tready (S0_AXIS_TREADY),
+
+    .m_axis_tdata  (M0_AXIS_TDATA),
+    .m_axis_tkeep  (M0_AXIS_TKEEP),
+    .m_axis_tuser  (M0_AXIS_TUSER),
+    .m_axis_tvalid (M0_AXIS_TVALID),
+    .m_axis_tready (M0_AXIS_TREADY),
+    .m_axis_tlast  (M0_AXIS_TLAST)
 );
-assign M0_AXIS_TUSER =1'b0;
+
+/*
+assign M0_AXIS_TVALID=S0_AXIS_TVALID;
+assign M0_AXIS_TDATA=S0_AXIS_TDATA ;
+assign M0_AXIS_TKEEP=S0_AXIS_TKEEP ;
+assign M0_AXIS_TLAST =S0_AXIS_TLAST ;
+assign S0_AXIS_TREADY  =M0_AXIS_TREADY  ;
+*/
+
+/*
+
+add_front_header add_front_inst (
+    // Part 1: System side signals
+    // Global Ports
+    .axis_aclk          (clk),
+    .axis_resetn       (rstn),
+
+    .s_axis_tvalid (S0_AXIS_TVALID),
+    .s_axis_tdata  (S0_AXIS_TDATA),
+    .s_axis_tkeep  ({64{1'b1}}),
+    .s_axis_tlast  (S0_AXIS_TLAST),
+    .s_axis_tuser  ({48{1'b0}}),
+    .s_axis_tready (),
+
+    .m_axis_tdata  (M0_AXIS_TDATA),
+    .m_axis_tkeep  (M0_AXIS_TKEEP),
+    .m_axis_tuser  (),
+    .m_axis_tvalid (M0_AXIS_TVALID),
+    .m_axis_tready (M0_AXIS_TREADY),
+    .m_axis_tlast  (M0_AXIS_TLAST),
+    
+    .enable (1'b1),
+    //.enable (1'b1),
+    //.short (1'b0)
+    .short (1'b0)
+);
+ 
+ 
+qdma_subsystem_hash dut_i  (        
+  .p_axis_tvalid(M0_AXIS_TVALID),
+  .p_axis_tdata(M0_AXIS_TDATA),
+  .p_axis_tlast(M0_AXIS_TLAST),
+  .p_axis_tready(M0_AXIS_TREADY),
+  .hash_key(320'h7C9C37DE18DC4386D9270F6F260374B8BFD0404B7872E224DC1B91BB011BA7A6376CC87ED6E31417),
+  .enable (1'b1),
+  .aclk(clk),
+  .aresetn(rstn)
+
+);*/
+
+//assign M0_AXIS_TUSER =1'b0;
+
 
 
 pcap_dumper
@@ -243,11 +302,11 @@ pcap_dumper
 AXIS_SINK_PCIE
 (
     .rst_n       	( rstn ),
-    .tdata        	(    M0_AXIS_TDATA ),
-    .tstrb        	(    M0_AXIS_TKEEP ),
-    .tready       	(    M0_AXIS_TREADY),
-    .tvalid       	(    M0_AXIS_TVALID),
-    .tlast         	(    M0_AXIS_TLAST),
+    .tdata        	(M0_AXIS_TDATA ),
+    .tstrb        	(M0_AXIS_TKEEP ),
+    .tready       	(M0_AXIS_TREADY),
+    .tvalid       	(M0_AXIS_TVALID),
+    .tlast         	(M0_AXIS_TLAST),
     .clk         	( clk ),
     .eos    	(  1'b0),
     .pktcount	(  rx_pktcount_1)
